@@ -2,39 +2,75 @@
 
 import { useEffect, useState } from "react";
 
+type HealthResponse = {
+  status: string;
+  time: string;
+};
+
 export default function Home() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const API = process.env.NEXT_PUBLIC_API_BASE;
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
-    if (!API) {
-      setError("API base URL not configured");
+    // 🔒 ENV CHECK
+    if (!API_BASE) {
+      setError("NEXT_PUBLIC_API_BASE is not configured in Vercel");
+      setLoading(false);
       return;
     }
 
-    fetch(`${API}/api/health`, { cache: "no-store" })
-      .then(res => {
+    const controller = new AbortController();
+
+    fetch(`${API_BASE}/api/health`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "Accept": "application/json",
+      },
+    })
+      .then((res) => {
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+          throw new Error(`Backend error: HTTP ${res.status}`);
         }
         return res.json();
       })
-      .then(setData)
-      .catch(err => {
-        console.error(err);
-        setError(err.message);
-      });
+      .then((json: HealthResponse) => {
+        setData(json);
+        setError(null);
+      })
+      .catch((err: any) => {
+        if (err.name !== "AbortError") {
+          console.error("Fetch error:", err);
+          setError(err.message || "Failed to fetch backend");
+        }
+      })
+      .finally(() => setLoading(false));
+
+    return () => controller.abort();
   }, []);
 
   return (
-    <main style={{ padding: 20 }}>
-      <h1>TradeFlow</h1>
+    <main style={{ padding: 24, fontFamily: "monospace" }}>
+      <h1>🚀 TradeFlow</h1>
 
-      {error && <p style={{ color: "red" }}>❌ {error}</p>}
+      {loading && <p>⏳ Connecting to backend...</p>}
 
-      <pre>{JSON.stringify(data, null, 2)}</pre>
+      {error && (
+        <p style={{ color: "red", fontWeight: "bold" }}>
+          ❌ {error}
+        </p>
+      )}
+
+      {data && (
+        <>
+          <p style={{ color: "green" }}>✅ Backend Connected</p>
+          <pre>{JSON.stringify(data, null, 2)}</pre>
+        </>
+      )}
     </main>
   );
 }
