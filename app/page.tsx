@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 type HealthResponse = {
   status: string;
+  service?: string;
   time: string;
 };
 
@@ -13,18 +14,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
-
-    // 🔒 ENV CHECK
-    if (!API_BASE) {
-      setError("NEXT_PUBLIC_API_BASE is not configured in Vercel");
-      setLoading(false);
-      return;
-    }
-
     const controller = new AbortController();
 
-    fetch(`${API_BASE}/api/health`, {
+    fetch("/api/health", {
       method: "GET",
       cache: "no-store",
       signal: controller.signal,
@@ -34,7 +26,7 @@ export default function Home() {
     })
       .then((res) => {
         if (!res.ok) {
-          throw new Error(`Backend error: HTTP ${res.status}`);
+          throw new Error(`HTTP ${res.status}`);
         }
         return res.json();
       })
@@ -57,7 +49,7 @@ export default function Home() {
     <main style={{ padding: 24, fontFamily: "monospace" }}>
       <h1>🚀 TradeFlow</h1>
 
-      {loading && <p>⏳ Connecting to backend...</p>}
+      {loading && <p>⏳ Connecting to backend…</p>}
 
       {error && (
         <p style={{ color: "red", fontWeight: "bold" }}>
