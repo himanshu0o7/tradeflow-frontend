@@ -21,7 +21,6 @@ type SignalResponse = {
     checks: Record<string, boolean>;
   };
   signal: {
-    timeframe?: string;
     action: string;
     confidence?: string;
     why?: string;
@@ -29,12 +28,20 @@ type SignalResponse = {
   };
 };
 
+const REFRESH_MAP: Record<string, number> = {
+  "1m": 60_000,
+  "5m": 300_000,
+  "15m": 900_000,
+};
+
 export default function Home() {
   const [data, setData] = useState<SignalResponse | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [intervalKey, setIntervalKey] = useState<"1m" | "5m" | "15m">("1m");
 
-  useEffect(() => {
+  const fetchSignal = () => {
+    setLoading(true);
     fetch("/api/signal?symbol=BANKNIFTY&expiry=2026-01-27", {
       cache: "no-store",
     })
@@ -48,25 +55,58 @@ export default function Home() {
         setError("Failed to load signal");
       })
       .finally(() => setLoading(false));
-  }, []);
+  };
 
-  const cardStyle = (action?: string) => ({
-    padding: 16,
-    borderRadius: 12,
-    border: "1px solid #ddd",
-    background:
-      action === "BUY_CE"
-        ? "#e7fff1"
-        : action === "BUY_PE"
-        ? "#ffecec"
-        : "#f5f5f5",
-  });
+  // 🔁 AUTO REFRESH
+  useEffect(() => {
+    fetchSignal(); // initial fetch
+
+    const id = setInterval(fetchSignal, REFRESH_MAP[intervalKey]);
+
+    return () => clearInterval(id);
+  }, [intervalKey]);
+
+  const cardBg = (action?: string) =>
+    action === "BUY_CE"
+      ? "#e6fff0"
+      : action === "BUY_PE"
+      ? "#ffecec"
+      : "#f4f4f4";
 
   return (
     <main style={{ padding: 20, fontFamily: "system-ui" }}>
-      <h1>📈 TradeFlow — Signal Engine</h1>
+      <h1>📈 TradeFlow — Auto Signal Engine</h1>
 
-      {loading && <p>⏳ Fetching signal…</p>}
+      {/* Controls */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        {(["1m", "5m", "15m"] as const).map(k => (
+          <button
+            key={k}
+            onClick={() => setIntervalKey(k)}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 8,
+              border: "1px solid #ccc",
+              background: intervalKey === k ? "#000" : "#fff",
+              color: intervalKey === k ? "#fff" : "#000",
+            }}
+          >
+            {k}
+          </button>
+        ))}
+        <button
+          onClick={fetchSignal}
+          style={{
+            padding: "6px 12px",
+            borderRadius: 8,
+            border: "1px solid #ccc",
+          }}
+        >
+          🔄 Refresh
+        </button>
+      </div>
+
+      {loading && <p>⏳ Updating signal…</p>}
       {error && <p style={{ color: "red" }}>❌ {error}</p>}
 
       {data && (
@@ -81,42 +121,38 @@ export default function Home() {
             </b>
           </p>
 
-          <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-            <div style={cardStyle(data.signal.action)}>
-              <h2>
-                Signal:{" "}
-                <span>
-                  {data.signal.action.replace("_", " ")}
-                </span>
-              </h2>
-              {data.signal.confidence && (
-                <p>Confidence: <b>{data.signal.confidence}</b></p>
-              )}
-              <p>
-                {data.signal.why || data.signal.reason || "—"}
-              </p>
-            </div>
-
-            {data.bias && (
-              <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 10 }}>
-                <h3>15m Bias</h3>
-                <p>
-                  <b>{data.bias.state}</b> — {data.bias.reason}
-                </p>
-                <p>Allow Trade: {data.bias.allow_trade ? "YES" : "NO"}</p>
-              </div>
+          <div
+            style={{
+              marginTop: 12,
+              padding: 16,
+              borderRadius: 12,
+              background: cardBg(data.signal.action),
+              border: "1px solid #ddd",
+            }}
+          >
+            <h2>Signal: {data.signal.action.replace("_", " ")}</h2>
+            {data.signal.confidence && (
+              <p>Confidence: <b>{data.signal.confidence}</b></p>
             )}
-
-            {data.confirmation && (
-              <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 10 }}>
-                <h3>5m Confirmation</h3>
-                <p>Strength: <b>{data.confirmation.strength}</b></p>
-                <pre style={{ fontSize: 12 }}>
-                  {JSON.stringify(data.confirmation.checks, null, 2)}
-                </pre>
-              </div>
-            )}
+            <p>{data.signal.why || data.signal.reason || "—"}</p>
           </div>
+
+          {data.bias && (
+            <div style={{ marginTop: 12 }}>
+              <h3>15m Bias</h3>
+              <p>
+                <b>{data.bias.state}</b> — {data.bias.reason}
+              </p>
+              <p>Allow Trade: {data.bias.allow_trade ? "YES" : "NO"}</p>
+            </div>
+          )}
+
+          {data.confirmation && (
+            <div style={{ marginTop: 12 }}>
+              <h3>5m Confirmation</h3>
+              <p>Strength: <b>{data.confirmation.strength}</b></p>
+            </div>
+          )}
         </>
       )}
     </main>
