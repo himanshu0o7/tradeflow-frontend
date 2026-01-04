@@ -13,6 +13,7 @@ type TF = "1m" | "5m" | "15m";
 
 const SYMBOL = "BANKNIFTY";
 const EXPIRY = "2026-01-27";
+const STRIKE_BAND = 5; // ±5 strikes around ATM
 
 export default function Home() {
   const [rows, setRows] = useState<GreekRow[]>([]);
@@ -23,20 +24,16 @@ export default function Home() {
   const abortRef = useRef<AbortController | null>(null);
 
   const loadGreeks = () => {
-    // cancel previous request
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     setLoading(true);
 
-    fetch(
-      `/api/greeks/${tf}?symbol=${SYMBOL}&expiry=${EXPIRY}`,
-      {
-        cache: "no-store",
-        signal: controller.signal,
-      }
-    )
+    fetch(`/api/greeks/${tf}?symbol=${SYMBOL}&expiry=${EXPIRY}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -56,9 +53,21 @@ export default function Home() {
 
   useEffect(() => {
     loadGreeks();
-    // cleanup on unmount
     return () => abortRef.current?.abort();
   }, [tf]);
+
+  // 🔍 ATM auto-detect + band
+  const filteredRows = (() => {
+    if (rows.length === 0) return [];
+
+    const sorted = [...rows].sort((a, b) => a.strike - b.strike);
+    const atmIndex = Math.floor(sorted.length / 2);
+
+    return sorted.slice(
+      Math.max(0, atmIndex - STRIKE_BAND),
+      Math.min(sorted.length, atmIndex + STRIKE_BAND + 1)
+    );
+  })();
 
   const cellColor = (v: number) => {
     if (v > 0.05) return "#e6fff0";    // strong positive
@@ -72,7 +81,7 @@ export default function Home() {
     <main style={{ padding: 20, fontFamily: "system-ui" }}>
       <h1>🔥 Greeks Heatmap — {SYMBOL}</h1>
       <p style={{ fontSize: 13 }}>
-        Expiry: <b>{EXPIRY}</b>
+        Expiry: <b>{EXPIRY}</b> | View: ATM ±{STRIKE_BAND}
       </p>
 
       {/* Timeframe Switch */}
@@ -108,13 +117,13 @@ export default function Home() {
       {loading && <p>⏳ Loading greeks…</p>}
       {error && <p style={{ color: "red" }}>❌ {error}</p>}
 
-      {!loading && !error && rows.length === 0 && (
+      {!loading && !error && filteredRows.length === 0 && (
         <p style={{ color: "#666" }}>
-          No greeks data available for selected timeframe.
+          No greeks data available.
         </p>
       )}
 
-      {rows.length > 0 && (
+      {filteredRows.length > 0 && (
         <table
           border={1}
           cellPadding={8}
@@ -134,7 +143,7 @@ export default function Home() {
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
+            {filteredRows.map(r => (
               <tr key={r.strike}>
                 <td><b>{r.strike}</b></td>
                 <td style={{ background: cellColor(r.delta_change) }}>
