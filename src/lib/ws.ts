@@ -10,7 +10,9 @@ export function connectMarketWS(
     onData(JSON.parse(e.data));
   };
 
-  ws.onerror = console.error;
+  ws.onerror = (err) => {
+    console.error("WS error", err);
+  };
 
   return ws;
 }
