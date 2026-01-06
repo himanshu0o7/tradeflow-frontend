@@ -17,14 +17,15 @@ export default function SignalLive() {
 
   async function loadSignal() {
     try {
-      setLoading(true);
-      const data = await fetchSignal("BANKNIFTY", "2026-01-27");
-      setSignal(data.signal);
-    } catch (err) {
-      console.error("Signal fetch failed", err);
-    } finally {
-      setLoading(false);
-    }
+  setLoading(true);
+  setError(null);
+  const data = await fetchSignal("BANKNIFTY", "2026-01-27");
+  setSignal(data.signal);
+} catch (err) {
+  setError("Signal service unavailable");
+} finally {
+  setLoading(false);
+}
   }
 
   useEffect(() => {
