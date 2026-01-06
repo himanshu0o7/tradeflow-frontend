@@ -1,11 +1,6 @@
 "use client";
 
-type Signal = {
-  action: "BUY_CE" | "BUY_PE" | "HOLD";
-  strike: number;
-  confidence: number;
-  reason: string;
-};
+import type { Signal } from "../lib/types";
 
 export default function SignalCard({ signal }: { signal: Signal }) {
   const color =
