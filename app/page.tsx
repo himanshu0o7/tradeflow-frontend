@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from "react";
 
@@ -19,8 +19,8 @@ type SignalResponse = {
     timestamp: string;
   };
   signal: {
-    action: string;
-    confidence: string;
+    action: "BUY_CE" | "BUY_PE" | "NO_TRADE";
+    confidence: number;
     why: string;
   };
   risk?: Risk;
@@ -30,26 +30,35 @@ type SignalResponse = {
 
 export default function Home() {
   const [data, setData] = useState<SignalResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [paperLoading, setPaperLoading] = useState(false);
   const [paperMsg, setPaperMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /* ================= FETCH SIGNAL ================= */
 
-  const fetchSignal = () => {
-    setLoading(true);
-    setError(null);
+  const fetchSignal = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    fetch("/api/signal?symbol=BANKNIFTY&expiry=2026-01-27", {
-      cache: "no-store",
-    })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then(setData)
-      .catch(() => setError("Failed to fetch signal"))
-      .finally(() => setLoading(false));
+      const res = await fetch(
+        "/api/signal?symbol=BANKNIFTY&expiry=2026-01-27",
+        { cache: "no-store" }
+      );
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json: SignalResponse = await res.json();
+      setData(json);
+    } catch (err) {
+      setError("Failed to fetch signal");
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -61,36 +70,51 @@ export default function Home() {
   const paperTrade = async () => {
     if (!data) return;
 
-    setPaperMsg("Placing paper trade…");
+    try {
+      setPaperLoading(true);
+      setPaperMsg("Placing paper trade…");
 
-    const res = await fetch("/api/paper-trade", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        symbol: data.meta.symbol,
-        expiry: data.meta.expiry,
-        action: data.signal.action,
-        confidence: data.signal.confidence,
-        reason: data.signal.why,
-      }),
-    });
+      const res = await fetch("/api/paper-trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: data.meta.symbol,
+          expiry: data.meta.expiry,
+          action: data.signal.action,
+          confidence: data.signal.confidence,
+          reason: data.signal.why,
+        }),
+      });
 
-    const json = await res.json();
-    setPaperMsg(json.status === "ok" ? "✅ Paper trade placed" : "❌ Failed");
+      if (!res.ok) throw new Error("Paper trade failed");
+
+      const json = await res.json();
+      setPaperMsg(json.status === "ok" ? "✅ Paper trade placed" : "❌ Failed");
+    } catch {
+      setPaperMsg("❌ Failed to place paper trade");
+    } finally {
+      setPaperLoading(false);
+    }
   };
 
-  /* ================= STATES ================= */
+  /* ================= UI STATES ================= */
 
   if (loading) {
     return <main style={{ padding: 20 }}>⏳ Loading signal…</main>;
   }
 
   if (error) {
-    return <main style={{ padding: 20, color: "red" }}>❌ {error}</main>;
+    return (
+      <main style={{ padding: 20, color: "red" }}>
+        ❌ {error}
+        <br />
+        <button onClick={fetchSignal}>Retry</button>
+      </main>
+    );
   }
 
   if (!data) {
-    return <main style={{ padding: 20 }}>No data</main>;
+    return <main style={{ padding: 20 }}>No data available</main>;
   }
 
   const r = data.risk;
@@ -103,10 +127,15 @@ export default function Home() {
   let rrRatio: string | number = "-";
   let riskExceeded = false;
 
-  if (r && r.stoploss_points && r.quantity) {
+  if (
+    r &&
+    r.stoploss_points !== null &&
+    r.stoploss_points > 0 &&
+    r.quantity > 0
+  ) {
     maxAllowedLoss = r.capital * (r.risk_pct / 100);
     actualLoss = r.stoploss_points * r.quantity;
-    targetPoints = r.stoploss_points * 2; // default 1:2 RR
+    targetPoints = r.stoploss_points * 2;
     rrRatio = (targetPoints / r.stoploss_points).toFixed(2);
     riskExceeded = actualLoss > maxAllowedLoss;
   }
@@ -114,8 +143,12 @@ export default function Home() {
   /* ================= UI ================= */
 
   return (
-    <main style={{ padding: 20, fontFamily: "system-ui" }}>
+    <main style={{ padding: 20, maxWidth: 600, margin: "0 auto" }}>
       <h1>📈 TradeFlow Signal</h1>
+
+      <button onClick={fetchSignal} style={{ marginBottom: 12 }}>
+        🔄 Refresh
+      </button>
 
       {/* SIGNAL BOX */}
       <div
@@ -133,23 +166,23 @@ export default function Home() {
       >
         <h2>{data.signal.action}</h2>
         <p>{data.signal.why}</p>
+        <small>Confidence: {(data.signal.confidence * 100).toFixed(0)}%</small>
       </div>
 
-      {/* NO TRADE CASE */}
+      {/* NO TRADE */}
       {!r && (
         <p style={{ color: "#666" }}>
           ℹ No trade conditions met. Waiting for alignment.
         </p>
       )}
 
-      {/* 🛡️ RISK BOX */}
+      {/* RISK BOX */}
       {r && (
         <div
           style={{
             padding: 16,
             borderRadius: 10,
-            border: "2px solid",
-            borderColor: riskExceeded ? "red" : "black",
+            border: `2px solid ${riskExceeded ? "red" : "#000"}`,
             background: riskExceeded ? "#ffecec" : "#fafafa",
           }}
         >
@@ -162,18 +195,9 @@ export default function Home() {
               <tr><td>Quantity</td><td>{r.quantity}</td></tr>
               <tr><td>Stoploss</td><td>{r.stoploss_points} pts</td></tr>
               <tr><td>Target</td><td>{targetPoints} pts</td></tr>
-              <tr>
-                <td><b>RR Ratio</b></td>
-                <td><b>{rrRatio}</b></td>
-              </tr>
-              <tr>
-                <td>Max Allowed Loss</td>
-                <td>₹{maxAllowedLoss}</td>
-              </tr>
-              <tr>
-                <td><b>Actual Loss</b></td>
-                <td><b>₹{actualLoss}</b></td>
-              </tr>
+              <tr><td><b>RR Ratio</b></td><td><b>{rrRatio}</b></td></tr>
+              <tr><td>Max Allowed Loss</td><td>₹{maxAllowedLoss}</td></tr>
+              <tr><td><b>Actual Loss</b></td><td><b>₹{actualLoss}</b></td></tr>
             </tbody>
           </table>
 
@@ -183,21 +207,19 @@ export default function Home() {
             </p>
           )}
 
-          {/* ▶ PAPER TRADE */}
           <button
-            disabled={riskExceeded}
+            disabled={riskExceeded || paperLoading}
             onClick={paperTrade}
             style={{
               marginTop: 12,
               padding: "8px 14px",
               borderRadius: 8,
-              border: "1px solid #000",
               background: riskExceeded ? "#ccc" : "#000",
               color: "#fff",
               cursor: riskExceeded ? "not-allowed" : "pointer",
             }}
           >
-            ▶ Paper Trade
+            {paperLoading ? "⏳ Placing…" : "▶ Paper Trade"}
           </button>
 
           {paperMsg && <p>{paperMsg}</p>}
