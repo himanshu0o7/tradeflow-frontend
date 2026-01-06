@@ -1,4 +1,19 @@
-export default function SignalCard({ signal }: any) {
+type Signal = {
+  action: "BUY_CE" | "BUY_PE" | "NO_TRADE";
+  strike?: number;
+  confidence: number;
+  reason: string;
+};
+
+type Props = {
+  signal: Signal;
+};
+
+export default function SignalCard({ signal }: Props) {
+  if (!signal) {
+    return null;
+  }
+
   const color =
     signal.action === "BUY_CE"
       ? "bg-green-600"
@@ -7,11 +22,28 @@ export default function SignalCard({ signal }: any) {
       : "bg-gray-600";
 
   return (
-    <div className={`p-4 rounded text-white ${color}`}>
-      <h2 className="text-xl font-bold">{signal.action}</h2>
-      <p>Strike: {signal.strike}</p>
-      <p>Confidence: {(signal.confidence * 100).toFixed(0)}%</p>
-      <p className="text-sm opacity-80">{signal.reason}</p>
+    <div
+      className={`p-4 rounded-lg text-white ${color} shadow-md`}
+    >
+      <h2 className="text-xl font-bold tracking-wide">
+        {signal.action === "NO_TRADE" ? "NO TRADE" : signal.action}
+      </h2>
+
+      {signal.strike !== undefined && (
+        <p className="mt-1">
+          <span className="opacity-80">Strike:</span>{" "}
+          <b>{signal.strike}</b>
+        </p>
+      )}
+
+      <p className="mt-1">
+        <span className="opacity-80">Confidence:</span>{" "}
+        <b>{Math.round(signal.confidence * 100)}%</b>
+      </p>
+
+      <p className="mt-2 text-sm opacity-90">
+        {signal.reason}
+      </p>
     </div>
   );
 }
