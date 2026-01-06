@@ -1,10 +1,12 @@
-/** @type {import('next').NextConfig} */
+ /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
+
   async rewrites() {
     return [
       {
         source: "/api/:path*",
-        destination: "http://164.68.119.45:8000/api/:path*",
+        destination: "https://api.kp5bot.com/api/:path*",
       },
     ];
   },
