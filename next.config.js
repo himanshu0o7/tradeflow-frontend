@@ -1,12 +1,11 @@
- /** @type {import('next').NextConfig} */
+/** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-
+  output: "standalone",
   async rewrites() {
     return [
       {
         source: "/api/:path*",
-        destination: "https://api.kp5bot.com/api/:path*",
+        destination: `${process.env.NEXT_PUBLIC_API_URL}/api/:path*`,
       },
     ];
   },
