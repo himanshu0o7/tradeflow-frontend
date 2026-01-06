@@ -1,16 +1,52 @@
+// lib/ws.ts
+
+type WSDataHandler = (data: any) => void;
+
 export function connectMarketWS(
   symbol: string,
-  onData: (data: any) => void
+  onData: WSDataHandler
 ) {
-  const ws = new WebSocket(
-    `ws://${process.env.NEXT_PUBLIC_WS_BASE}/ws/market/${symbol}`
-  );
+  const WS_BASE =
+    process.env.NEXT_PUBLIC_WS_BASE ||
+    "wss://api.kp5bot.com"; // 🔴 MUST be wss
 
-  ws.onmessage = (e) => {
-    onData(JSON.parse(e.data));
+  let ws: WebSocket | null = null;
+  let reconnectTimer: any = null;
+
+  const connect = () => {
+    ws = new WebSocket(`${WS_BASE}/ws/market/${symbol}`);
+
+    ws.onopen = () => {
+      console.log("✅ WS connected");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        onData(parsed);
+      } catch (e) {
+        console.error("WS parse error", e);
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error("❌ WS error", err);
+    };
+
+    ws.onclose = () => {
+      console.warn("⚠️ WS closed, reconnecting...");
+      reconnectTimer = setTimeout(connect, 3000);
+    };
   };
 
-  ws.onerror = console.error;
+  connect();
 
-  return ws;
+  return {
+    close: () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    },
+  };
 }
