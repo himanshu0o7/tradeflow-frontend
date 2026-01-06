@@ -6,7 +6,7 @@ export async function fetchSignal(symbol: string, expiry: string) {
   });
 
   if (!res.data?.signal) {
-    throw new Error("Invalid signal payload");
+    throw new Error("Invalid API response");
   }
 
   return res.data;
